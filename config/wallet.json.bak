@@ -1,0 +1,20 @@
+// {
+//   "wallets": [
+//     {
+//       "name": "Wallet 1",
+//       "privateKey": "",
+//       "proxy": ""
+//     },
+//     {
+//       "name": "Wallet 2",
+//       "privateKey": "",
+//       "proxy": ""
+//     },
+//   ],
+//   "settings": {
+//     "concurrentTasks": 93,
+//     "timeoutMin": 5000,
+//     "timeoutMax": 15000,
+//     "rpcUrl": "https://api.zan.top/node/v1/pharos/testnet/54b49326c9f44b6e8730dc5dd4348421"
+//   }
+// }

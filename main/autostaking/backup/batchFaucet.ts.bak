@@ -1,0 +1,245 @@
+import path from "path";import path from "path";
+
+import { failed } from "@scripts/utils/console";import { failed } from "@scripts/utils/console";
+
+import {import {
+
+  executeAllWalletsInParallel,  executeAllWalletsInParallel,
+
+  loadWalletManager,  loadWalletManager,
+
+  WalletInstance,  WalletInstance,
+
+} from "@scripts/utils/batchWallet";} from "@scripts/utils/batchWallet";
+
+import { faucet } from "@scripts/pharosNetwork/autostaking/faucet";import { faucet } from "@scripts/pharosNetwork/autostaking/faucet";
+
+import { sleep } from "@scripts/utils/time";
+
+/**
+
+/** * Execute faucet for a single wallet in parallel
+
+ * Hàm thực hiện retry khi gặp lỗi */
+
+ */async function claimFaucetForWallet(wallet: WalletInstance, index: number) {
+
+async function executeWithRetry<T>(  try {
+
+  fn: () => Promise<T>,    console.log(
+
+  maxRetries: number = 10,      `[${wallet.name}] Claiming faucet from address: ${wallet.address}`
+
+  delayMs: number = 5000    );
+
+): Promise<T> {
+
+  let lastError: any;    // Get autoStakingToken from wallet config, fallback to process.env
+
+    const autoStakingToken =
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {      wallet.autoStakingToken || process.env.AUTOSTAKING_TOKEN;
+
+    try {
+
+      return await fn();    if (!autoStakingToken) {
+
+    } catch (error: any) {      throw new Error(`No AutoStaking token found for ${wallet.name}`);
+
+      lastError = error;    }
+
+      
+
+      // Chi tiết hơn về lỗi    console.log(
+
+      console.error(`Attempt ${attempt}/${maxRetries} failed: ${error.message || error}`);      `[${wallet.name}] Using AutoStaking token: ${autoStakingToken.substring(
+
+              0,
+
+      if (attempt < maxRetries) {        20
+
+        const waitTime = delayMs * attempt; // Tăng thời gian chờ sau mỗi lần thử      )}...`
+
+        console.log(`Retrying in ${waitTime / 1000} seconds...`);    );
+
+        await sleep(waitTime);
+
+      }    await faucet({
+
+    }      signer: wallet.signer,
+
+  }      autoStakingToken: autoStakingToken,
+
+    });
+
+  throw new Error(
+
+    `Failed after ${maxRetries} attempts. Last error: ${    console.log(`[${wallet.name}] Successfully claimed faucet`);
+
+      lastError.message || lastError    return {
+
+    }`      success: true,
+
+  );      wallet: wallet.name,
+
+}      address: wallet.address,
+
+    };
+
+/**  } catch (error) {
+
+ * Execute faucet for a single wallet in parallel    failed({ errorMessage: `[${wallet.name}] Error: ${error}` });
+
+ */    return {
+
+async function claimFaucetForWallet(wallet: WalletInstance, index: number) {      success: false,
+
+  try {      wallet: wallet.name,
+
+    console.log(      address: wallet.address,
+
+      `[${wallet.name}] Claiming faucet from address: ${wallet.address}`      error,
+
+    );    };
+
+  }
+
+    // Get autoStakingToken from wallet config, fallback to process.env}
+
+    const autoStakingToken =
+
+      wallet.autoStakingToken || process.env.AUTOSTAKING_TOKEN;/**
+
+ * Main function to run parallel faucet claims for all wallets
+
+    if (!autoStakingToken) { */
+
+      throw new Error(`No AutoStaking token found for ${wallet.name}`);async function main() {
+
+    }  try {
+
+    // Load wallet configuration
+
+    console.log(    const configPath = path.resolve(__dirname, "../../config/wallets.json");
+
+      `[${wallet.name}] Using AutoStaking token: ${autoStakingToken.substring(    const walletManager = loadWalletManager(configPath);
+
+        0,
+
+        20    console.log(`[BATCH MODE] Loaded ${walletManager.wallets.length} wallets.`);
+
+      )}...`    console.log(`Running all wallets in parallel (batch mode)`);
+
+    );
+
+    // Execute faucet claims for all wallets in parallel
+
+    // Sử dụng retry cho faucet    const startTime = Date.now();
+
+    await executeWithRetry(async () => {
+
+      return await faucet({    const results = await executeAllWalletsInParallel(
+
+        signer: wallet.signer,      walletManager,
+
+        autoStakingToken: autoStakingToken,      claimFaucetForWallet
+
+      });    );
+
+    });
+
+    const endTime = Date.now();
+
+    console.log(`[${wallet.name}] Successfully claimed faucet`);    const executionTime = (endTime - startTime) / 1000; // in seconds
+
+    return {
+
+      success: true,    // Print summary
+
+      wallet: wallet.name,    const successful = results.filter((r) => r.success).length;
+
+      address: wallet.address,    console.log(
+
+    };      `\n[BATCH SUMMARY] ${successful}/${results.length} faucet claims were successful`
+
+  } catch (error) {    );
+
+    failed({ errorMessage: `[${wallet.name}] Error: ${error instanceof Error ? error.message : error}` });    console.log(
+
+    return {      `[BATCH TIMING] Total execution time: ${executionTime.toFixed(2)} seconds`
+
+      success: false,    );
+
+      wallet: wallet.name,  } catch (error) {
+
+      address: wallet.address,    console.error(
+
+      error,      "[BATCH ERROR] Error running parallel wallet faucet claims:",
+
+    };      error
+
+  }    );
+
+}  }
+
+}
+
+/**
+
+ * Main function to run parallel faucet claims for all walletsmain().catch(console.error);
+
+ */
+async function main() {
+  try {
+    // Load wallet configuration
+    const configPath = path.resolve(__dirname, "../../config/wallets.json");
+    const walletManager = loadWalletManager(configPath);
+
+    console.log(`[BATCH MODE] Loaded ${walletManager.wallets.length} wallets.`);
+    console.log(`[BATCH MODE] Running all wallets in parallel with retry (batch mode)`);
+
+    // Execute faucet claims for all wallets in parallel
+    const startTime = Date.now();
+
+    const results = await executeAllWalletsInParallel(
+      walletManager,
+      claimFaucetForWallet
+    );
+
+    const endTime = Date.now();
+    const executionTime = (endTime - startTime) / 1000; // in seconds
+
+    // Print summary
+    const successful = results.filter((r) => r.success).length;
+    console.log(
+      `\n[BATCH SUMMARY] ${successful}/${results.length} faucet claims were successful`
+    );
+    console.log(
+      `[BATCH TIMING] Total execution time: ${executionTime.toFixed(2)} seconds`
+    );
+    
+    // Log failed operations for debugging
+    const failed = results.filter((r) => !r.success).length;
+    if (failed > 0) {
+      console.log(`\n[FAILED OPERATIONS]`);
+      results
+        .filter((r) => !r.success)
+        .forEach((r) => {
+          console.log(`  ${r.wallet} (${r.address}): ${r.error}`);
+        });
+    }
+    
+    process.exit(0);
+  } catch (error) {
+    console.error(
+      "[BATCH ERROR] Error running parallel wallet faucet claims:",
+      error instanceof Error ? error.message : error
+    );
+    process.exit(1);
+  }
+}
+
+main().catch((error) => {
+  console.error("Unhandled error:", error instanceof Error ? error.message : error);
+  process.exit(1);
+});
